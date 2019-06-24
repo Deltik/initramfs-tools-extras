@@ -3,26 +3,38 @@
 PREREQ=""
 
 prereqs() {
-    echo "$PREREQ"
+	echo "$PREREQ"
 }
 
 case "$1" in
-    prereqs)
-        prereqs
-        exit 0
-    ;;
+	prereqs)
+		prereqs
+		exit 0
+		;;
 esac
 
 if grep -q ^BOND= /conf/initramfs.conf; then
-    . /conf/initramfs.conf
-    modprobe bonding $BOND_MODE
+	. /conf/initramfs.conf
+	modprobe bonding $BOND_MODE
 fi
 
+echo "Network interfaces loaded: "
+echo `ls /sys/class/net`
+
 for BOND_IFACE in ${BOND:-*}; do
-    BOND_DEVICE=$(echo $BOND_IFACE | cut -d":" -f1)
-    BOND_SLAVES=$(echo $BOND_IFACE | cut -d":" -f2 | sed "s/,/ /g" )
-    ifenslave $BOND_DEVICE $BOND_SLAVES
+	BOND_DEVICE=$(echo $BOND_IFACE | cut -d":" -f1)
+	BOND_SLAVES=$(echo $BOND_IFACE | cut -d":" -f2 | sed "s/,/ /g")
+	echo "+$BOND_DEVICE" > /sys/class/net/bonding_masters
+	for BOND_OPTION in ${BOND_MODE:-*}; do
+		BOND_OPTION_NAME=$(echo $BOND_OPTION | cut -d"=" -f1)
+		BOND_OPTION_VALUE=$(echo $BOND_OPTION | cut -d"=" -f2)
+		echo $BOND_OPTION_VALUE > /sys/class/net/$BOND_DEVICE/bonding/$BOND_OPTION_NAME
+	done
+	for BOND_SLAVE in $BOND_SLAVES; do
+		ip link set $BOND_SLAVE down
+		echo "+$BOND_SLAVE" > /sys/class/net/$BOND_DEVICE/bonding/slaves
+	done
+	ip link set $BOND_DEVICE up
 done
 
 exit 0
-

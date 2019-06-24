@@ -1,0 +1,32 @@
+#!/bin/sh
+
+PREREQ=""
+
+prereqs() {
+	echo "$PREREQ"
+}
+
+case "$1" in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+if grep -q ^BOND= /conf/initramfs.conf; then
+	. /conf/initramfs.conf
+fi
+
+for BOND_IFACE in ${BOND:-*}; do
+	BOND_DEVICE=$(echo $BOND_IFACE | cut -d":" -f1)
+	BOND_SLAVES=$(echo $BOND_IFACE | cut -d":" -f2 | sed "s/,/ /g" )
+	echo "Unloading bond interface: $BOND_DEVICE"
+	ip link set $BOND_DEVICE down
+	for BOND_SLAVE in $BOND_SLAVES; do
+		echo "-$BOND_SLAVE" > /sys/class/net/$BOND_DEVICE/bonding/slaves
+	done
+	ip link del $BOND_DEVICE
+	rm -fv /run/netplan/$BOND_DEVICE.yaml
+done
+
+exit 0
